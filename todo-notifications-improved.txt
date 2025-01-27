@@ -1,0 +1,73 @@
+alias: YOUR's To-Do Notification
+description: To-do Notifications with Exact Time Notifications
+trigger:
+  - platform: time_pattern
+    minutes: /1
+condition: []
+action:
+  - service: todo.get_items
+    metadata: {}
+    data:
+      status: needs_action
+    response_variable: todovar
+    target:
+      entity_id: todo.reminders
+  - if:
+      - condition: template
+        value_template: |-
+          {%- for item in todovar['todo.reminders']['items'] %}
+            {% if 'due' in item %}
+              {% set timeformat = "%Y-%m-%dT%H:%M:%S%z" if 'T' in item['due'] else "%Y-%m-%d" %}
+              {% set item_due = as_local(strptime(item['due'], timeformat)) %}
+              {% set current_time = now() %}
+              {% set time_diff = (item_due - current_time).total_seconds() | abs %}
+              {% if time_diff < 60 %}
+                True
+                {% break %}
+              {% endif %}
+            {% endif %}
+          {% endfor -%}
+    then:
+      - service: persistent_notification.create
+        data:
+          notification_id: "task_due_{{ now().strftime('%Y%m%d_%H%M') }}"
+          title: Task Due Now!
+          message: |
+            {%- for item in todovar['todo.reminders']['items'] %}
+              {% if 'due' in item %}
+                {% set timeformat = "%Y-%m-%dT%H:%M:%S%z" if 'T' in item['due'] else "%Y-%m-%d" %}
+                {% set item_due = as_local(strptime(item['due'], timeformat)) %}
+                {% set current_time = now() %}
+                {% set time_diff = (item_due - current_time).total_seconds() | abs %}
+                {% if time_diff < 60 %}
+                  {{ item['summary'] }}
+                  Due: {{ item_due.strftime("%I:%M %p") }}
+                {% endif %}
+              {% endif %}
+            {% endfor -%}
+      - service: notify.mobile_app_sm_g781u
+        data:
+          title: Task Due Now!
+          message: |
+            {%- for item in todovar['todo.reminders']['items'] %}
+              {% if 'due' in item %}
+                {% set timeformat = "%Y-%m-%dT%H:%M:%S%z" if 'T' in item['due'] else "%Y-%m-%d" %}
+                {% set item_due = as_local(strptime(item['due'], timeformat)) %}
+                {% set current_time = now() %}
+                {% set time_diff = (item_due - current_time).total_seconds() | abs %}
+                {% if time_diff < 60 %}
+                  {{ item['summary'] }}
+                  Due: {{ item_due.strftime("%I:%M %p") }}
+                {% endif %}
+              {% endif %}
+            {% endfor -%}
+          data:
+            ttl: 0
+            priority: high
+            tag: todo_notification
+            actions:
+              - action: URI
+                title: Check your to-do list
+                icon: mdi:note
+                uri: /todo
+mode: single
